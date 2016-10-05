@@ -49,6 +49,16 @@ requiredNamed.add_argument('-r', '--reddit', help='the subreddit to crawl', requ
 
 parser.add_argument('-a', '--amount', nargs='?', type=int, help='The amount of submissions to crawl')
 
+def download(url, savepath):
+	q = requests.get(url, stream=True)
+	if q.status_code == 200:
+		if not os.path.exists(savepath.rsplit('/', 1)[0]):
+			os.makedirs(savepath.rsplit('/', 1)[0])
+
+		with open(savepath, 'wb') as f:
+			q.raw.decode_content = True
+			shutil.copyfileobj(q.raw, f)
+
 def main():
 	if not len(sys.argv) > 1:
 		parser.print_help()
@@ -75,14 +85,7 @@ def main():
 				if post["data"]["domain"].lower() != "self.{}".format(reddit).lower():
 					url = post["data"]["url"]
 					if url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webm')):
-						q = requests.get(url, stream=True)
-						if q.status_code == 200:
-							if not os.path.exists(reddit):
-								os.makedirs(reddit)
-
-							with open("{}/{}".format(reddit, url.rsplit('/', 1)[-1]), 'wb') as f:
-								q.raw.decode_content = True
-								shutil.copyfileobj(q.raw, f)
+						download(url, "{}/{}".format(reddit, url.rsplit('/', 1)[-1]))
 					else:
 						pattern = r'https?:\/\/(m\.)?imgur\.com\/a\/.*$'
 						prog = re.compile(pattern)
@@ -93,17 +96,7 @@ def main():
 							try:
 								images = client.get_album_images(album)
 								for image in images:
-									q = requests.get(image.link, stream=True)
-									if q.status_code == 200:
-										if not os.path.exists(reddit):
-											os.makedirs(reddit)
-
-										if not os.path.exists("{}/{}".format(reddit, album)):
-											os.makedirs("{}/{}".format(reddit, album))
-
-										with open("{}/{}/{}".format(reddit, album, image.link.rsplit('/', 1)[-1]), 'wb') as f:
-											q.raw.decode_content = True
-											shutil.copyfileobj(q.raw, f)
+									download(image.link, "{}/{}/{}".format(reddit, album, image.link.rsplit('/', 1)[-1]))
 							except ImgurClientError as e:
 								print(e.error_message)
 						else:
@@ -114,34 +107,16 @@ def main():
 
 							if m is not None:
 								im = m.group(0).rsplit('/', 1)[-1]
-								q = requests.get("http://giant.gfycat.com/{}.webm".format(im), stream=True)
-								if q.status_code == 200:
-									if not os.path.exists(reddit):
-										os.makedirs(reddit)
-
-									with open("{}/{}.webm".format(reddit, im), 'wb') as f:
-										q.raw.decode_content = True
-										shutil.copyfileobj(q.raw, f)
+								download("http://giant.gfycat.com/{}.webm".format(im), "{}/{}.webm".format(reddit, im))
 							else:
 								image = url.rsplit('/', 1)[-1]
 								if image is not None:
 									try:
 										img = client.get_image(image)
-
 										if img.link.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webm')):
-											q = requests.get(img.link, stream=True)
-											if q.status_code == 200:
-												if not os.path.exists(reddit):
-													os.makedirs(reddit)
-
-												with open("{}/{}".format(reddit, img.link.rsplit('/', 1)[-1]), 'wb') as f:
-													q.raw.decode_content = True
-													shutil.copyfileobj(q.raw, f)
-
+											download(img.link, "{}/{}".format(reddit, img.link.rsplit('/', 1)[-1]))
 									except ImgurClientError as e:
 										print(e.error_message)
-
-
 		elif r.status_code == 404:
 			print("Couldn't find subreddit {}".format(reddit))
 		elif r.status_code == 429:
