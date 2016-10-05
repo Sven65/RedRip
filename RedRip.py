@@ -40,14 +40,13 @@ def getConfig(section):
 client_id = getConfig("Imgur")["client_id"]
 client_secret = getConfig("Imgur")["client_secret"]
 
-client = ImgurClient(client_id, client_secret)
-
 parser = argparse.ArgumentParser(description='Fetches images from subreddits')
 
 requiredNamed = parser.add_argument_group('required named arguments')
 requiredNamed.add_argument('-r', '--reddit', help='the subreddit to crawl', required=True)
 
 parser.add_argument('-a', '--amount', nargs='?', type=int, help='The amount of submissions to crawl')
+parser.add_argument('-s', '--sort', choices=['hot', 'new', 'rising', 'controversial', 'top', 'guilded'],  nargs='?', type=str, help='What to sort by')
 
 def download(url, savepath):
 	q = requests.get(url, stream=True)
@@ -59,10 +58,16 @@ def download(url, savepath):
 			q.raw.decode_content = True
 			shutil.copyfileobj(q.raw, f)
 
+def rchop(string, end):
+	if string.endswith(end):
+		return string[:-len(end)]
+	return string
+
 def main():
 	if not len(sys.argv) > 1:
 		parser.print_help()
 	else:
+		client = ImgurClient(client_id, client_secret)
 		args = parser.parse_args()
 
 		reddit = ""
@@ -74,17 +79,21 @@ def main():
 			reddit = args.reddit
 
 		amount = 50;
+		sort = "hot";
 		if args.amount is not None:
 			amount = args.amount
 
-		print("Crawling {} submissions from {}".format(amount, reddit))
+		if args.sort is not None:
+			sort = args.sort
 
-		r = requests.get("https://www.reddit.com/r/{}.json?limit={}".format(reddit, amount))
+		print("Crawling {} {} submissions from {}".format(amount, sort, reddit))
+
+		r = requests.get("https://www.reddit.com/r/{}/{}.json?limit={}".format(reddit, sort, amount))
 		if r.status_code == 200:
 			for post in r.json()["data"]["children"]:
 				if post["data"]["domain"].lower() != "self.{}".format(reddit).lower():
 					url = post["data"]["url"]
-					if url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webm')):
+					if url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webm', 'gifv')):
 						download(url, "{}/{}".format(reddit, url.rsplit('/', 1)[-1]))
 					else:
 						pattern = r'https?:\/\/(m\.)?imgur\.com\/a\/.*$'
@@ -109,21 +118,21 @@ def main():
 								im = m.group(0).rsplit('/', 1)[-1]
 								download("http://giant.gfycat.com/{}.webm".format(im), "{}/{}.webm".format(reddit, im))
 							else:
-								image = url.rsplit('/', 1)[-1]
+								image = rchop(url.rsplit('/', 1)[-1], "?1")
 								if image is not None:
-									try:
-										img = client.get_image(image)
-										if img.link.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webm')):
-											download(img.link, "{}/{}".format(reddit, img.link.rsplit('/', 1)[-1]))
-									except ImgurClientError as e:
-										print(e.error_message)
+									if len(image) > 0:
+										try:
+											img = client.get_image(image)
+											if img.link.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webm', 'gifv')):
+												download(img.link, "{}/{}".format(reddit, img.link.rsplit('/', 1)[-1]))
+										except ImgurClientError as e:
+											print(e.error_message)
 		elif r.status_code == 404:
 			print("Couldn't find subreddit {}".format(reddit))
 		elif r.status_code == 429:
 			print("Couldn't fetch reddit data. Please try again later.")
 		else:
 			print("Got status code {}".format(r.status_code))
-
 
 if __name__ == "__main__":
 	main()
