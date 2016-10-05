@@ -47,6 +47,7 @@ requiredNamed.add_argument('-r', '--reddit', help='the subreddit to crawl', requ
 
 parser.add_argument('-a', '--amount', nargs='?', type=int, help='The amount of submissions to crawl')
 parser.add_argument('-s', '--sort', choices=['hot', 'new', 'rising', 'controversial', 'top', 'guilded'],  nargs='?', type=str, help='What to sort by')
+parser.add_argument('-l', '--last', nargs='?', type=str, help='The post ID to pull after')
 
 def download(url, savepath):
 	q = requests.get(url, stream=True)
@@ -88,11 +89,16 @@ def main():
 
 		print("Crawling {} {} submissions from {}".format(amount, sort, reddit))
 
-		r = requests.get("https://www.reddit.com/r/{}/{}.json?limit={}".format(reddit, sort, amount))
+		ur = "https://www.reddit.com/r/{}/{}.json?limit={}".format(reddit, sort, amount)
+		if args.last is not None:
+			ur += "&after=t3_{}".format(args.last)
+
+		r = requests.get(ur)
 		if r.status_code == 200:
 			for post in r.json()["data"]["children"]:
 				if post["data"]["domain"].lower() != "self.{}".format(reddit).lower():
 					url = post["data"]["url"]
+					
 					if url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webm', 'gifv')):
 						download(url, "{}/{}".format(reddit, url.rsplit('/', 1)[-1]))
 					else:
@@ -127,6 +133,8 @@ def main():
 												download(img.link, "{}/{}".format(reddit, img.link.rsplit('/', 1)[-1]))
 										except ImgurClientError as e:
 											print(e.error_message)
+			print("Last post: {}".format(r.json()["data"]["children"][-1]["data"]["id"]))
+
 		elif r.status_code == 404:
 			print("Couldn't find subreddit {}".format(reddit))
 		elif r.status_code == 429:

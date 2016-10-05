@@ -16,7 +16,7 @@ Copy the client ID and client secret into ``Config.ini``
 
 ```
 RedRip.py [-h] -r REDDIT [-a [AMOUNT]]
-          [-s [{hot,new,rising,controversial,top,guilded}]]
+          [-s [{hot,new,rising,controversial,top,guilded}]] [-l [LAST]]
 
 Fetches images from subreddits
 
@@ -26,6 +26,8 @@ optional arguments:
                         The amount of submissions to crawl
   -s [{hot,new,rising,controversial,top,guilded}], --sort [{hot,new,rising,controversial,top,guilded}]
                         What to sort by
+  -l [LAST], --last [LAST]
+                        The post ID to pull after
 
 required named arguments:
   -r REDDIT, --reddit REDDIT
