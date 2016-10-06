@@ -48,6 +48,7 @@ requiredNamed.add_argument('-r', '--reddit', help='the subreddit to crawl', requ
 parser.add_argument('-a', '--amount', nargs='?', type=int, help='The amount of submissions to crawl')
 parser.add_argument('-s', '--sort', choices=['hot', 'new', 'rising', 'controversial', 'top', 'guilded'],  nargs='?', type=str, help='What to sort by')
 parser.add_argument('-l', '--last', nargs='?', type=str, help='The post ID to pull after')
+parser.add_argument('-f', '--formats', nargs='*', choices=['png', 'jpg', 'gif', 'gifv', 'webm', 'jpeg'], default=['png', 'jpg', 'gif', 'gifv', 'webm', 'jpeg'], help="The file formats to fetch");
 
 def download(url, savepath):
 	q = requests.get(url, stream=True)
@@ -99,7 +100,7 @@ def main():
 				if post["data"]["domain"].lower() != "self.{}".format(reddit).lower():
 					url = post["data"]["url"]
 					
-					if url.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webm', 'gifv')):
+					if url.lower().endswith(tuple(args.formats)):
 						download(url, "{}/{}".format(reddit, url.rsplit('/', 1)[-1]))
 					else:
 						pattern = r'https?:\/\/(m\.)?imgur\.com\/a\/.*$'
@@ -111,7 +112,8 @@ def main():
 							try:
 								images = client.get_album_images(album)
 								for image in images:
-									download(image.link, "{}/{}/{}".format(reddit, album, image.link.rsplit('/', 1)[-1]))
+									if(image.link.endswith(tuple(args.formats))):
+										download(image.link, "{}/{}/{}".format(reddit, album, image.link.rsplit('/', 1)[-1]))
 							except ImgurClientError as e:
 								print(e.error_message)
 						else:
@@ -122,14 +124,15 @@ def main():
 
 							if m is not None:
 								im = m.group(0).rsplit('/', 1)[-1]
-								download("http://giant.gfycat.com/{}.webm".format(im), "{}/{}.webm".format(reddit, im))
+								if "webm" in args.formats:
+									download("http://giant.gfycat.com/{}.webm".format(im), "{}/{}.webm".format(reddit, im))
 							else:
 								image = rchop(url.rsplit('/', 1)[-1], "?1")
 								if image is not None:
 									if len(image) > 0:
 										try:
 											img = client.get_image(image)
-											if img.link.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webm', 'gifv')):
+											if img.link.lower().endswith(tuple(args.formats)):
 												download(img.link, "{}/{}".format(reddit, img.link.rsplit('/', 1)[-1]))
 										except ImgurClientError as e:
 											print(e.error_message)
@@ -138,7 +141,7 @@ def main():
 		elif r.status_code == 404:
 			print("Couldn't find subreddit {}".format(reddit))
 		elif r.status_code == 429:
-			print("Couldn't fetch reddit data. Please try again later.")
+			print("Ratelimited. Please try again later.")
 		else:
 			print("Got status code {}".format(r.status_code))
 
