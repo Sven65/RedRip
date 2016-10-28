@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # RedRip.py, a subreddit image fetcher
 # Copyright Mackan <thormax5@gmail.com>
 #
@@ -23,9 +24,12 @@ import configparser
 import shutil
 import os
 from imgurpython.helpers.error import ImgurClientError
+from bs4 import BeautifulSoup as bs
 
 Config = configparser.ConfigParser()
 Config.read("Config.ini")
+
+verbose = True
 
 def getConfig(section):
 	opts = {}
@@ -51,14 +55,17 @@ parser.add_argument('-l', '--last', nargs='?', type=str, help='The post ID to pu
 parser.add_argument('-f', '--formats', nargs='*', choices=['png', 'jpg', 'gif', 'gifv', 'webm', 'jpeg'], default=['png', 'jpg', 'gif', 'gifv', 'webm', 'jpeg'], help="The file formats to fetch");
 
 def download(url, savepath):
-	q = requests.get(url, stream=True)
-	if q.status_code == 200:
-		if not os.path.exists(savepath.rsplit('/', 1)[0]):
-			os.makedirs(savepath.rsplit('/', 1)[0])
+	try:
+		q = requests.get(url, stream=True)
+		if q.status_code == 200:
+			if not os.path.exists(savepath.rsplit('/', 1)[0]):
+				os.makedirs(savepath.rsplit('/', 1)[0])
 
-		with open(savepath, 'wb') as f:
-			q.raw.decode_content = True
-			shutil.copyfileobj(q.raw, f)
+			with open(savepath, 'wb') as f:
+				q.raw.decode_content = True
+				shutil.copyfileobj(q.raw, f)
+	except:
+		print("error")
 
 def rchop(string, end):
 	if string.endswith(end):
@@ -103,6 +110,9 @@ def main():
 					if url.lower().endswith(tuple(args.formats)):
 						download(url, "{}/{}".format(reddit, url.rsplit('/', 1)[-1]))
 					else:
+						if verbose:
+							print(url)
+
 						pattern = r'https?:\/\/(m\.)?imgur\.com\/a\/.*$'
 						prog = re.compile(pattern)
 						m = prog.search(url.lower())
@@ -127,15 +137,47 @@ def main():
 								if "webm" in args.formats:
 									download("http://giant.gfycat.com/{}.webm".format(im), "{}/{}.webm".format(reddit, im))
 							else:
-								image = rchop(url.rsplit('/', 1)[-1], "?1")
-								if image is not None:
-									if len(image) > 0:
-										try:
-											img = client.get_image(image)
-											if img.link.lower().endswith(tuple(args.formats)):
-												download(img.link, "{}/{}".format(reddit, img.link.rsplit('/', 1)[-1]))
-										except ImgurClientError as e:
-											print(e.error_message)
+								pattern = r'.*\.tumblr\.com/post/'
+								prog = re.compile(pattern)
+								m = prog.search(url.lower())
+
+								if m is not None:
+									# Tumblr
+									response = requests.get(url)
+									soup = bs(response.content, 'html.parser')
+									img_elements = soup.findAll("img")
+							
+									for img in img_elements:
+										#print(u"{}".format(img).encode(sys.stdout.encoding, errors='replace'))
+										
+										pattern = r'.*\.media\.tumblr\.com/.*/tumblr_.*'
+										prog = re.compile(pattern)
+										m = prog.search(img.attrs['src'])
+
+										if m is not None:
+											img_url = img.attrs['src']
+											try:
+												if verbose:
+													print("Tumblr: "+img_url)
+												if img_url != "":
+													p = img_url.rsplit('/', 1)[-1]
+													if verbose:
+														print(p)
+														
+													download(img_url, "{}/{}".format(reddit, p))
+											except Exception as ex:
+												print(ex.strerror)
+								else:
+
+									image = rchop(url.rsplit('/', 1)[-1], "?1")
+									if image is not None:
+										if len(image) > 0:
+											try:
+												img = client.get_image(image)
+												if img.link.lower().endswith(tuple(args.formats)):
+													download(img.link, "{}/{}".format(reddit, img.link.rsplit('/', 1)[-1]))
+											except ImgurClientError as e:
+												print(e.error_message)
 			print("Last post: {}".format(r.json()["data"]["children"][-1]["data"]["id"]))
 
 		elif r.status_code == 404:
