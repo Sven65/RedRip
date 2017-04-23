@@ -55,17 +55,18 @@ parser.add_argument('-l', '--last', nargs='?', type=str, help='The post ID to pu
 parser.add_argument('-f', '--formats', nargs='*', choices=['png', 'jpg', 'gif', 'gifv', 'webm', 'jpeg'], default=['png', 'jpg', 'gif', 'gifv', 'webm', 'jpeg'], help="The file formats to fetch");
 
 def download(url, savepath):
-	try:
-		q = requests.get(url, stream=True)
-		if q.status_code == 200:
-			if not os.path.exists(savepath.rsplit('/', 1)[0]):
-				os.makedirs(savepath.rsplit('/', 1)[0])
+	if not os.path.isfile(savepath):
+		try:
+			q = requests.get(url, stream=True)
+			if q.status_code == 200:
+				if not os.path.exists(savepath.rsplit('/', 1)[0]):
+					os.makedirs(savepath.rsplit('/', 1)[0])
 
-			with open(savepath, 'wb') as f:
-				q.raw.decode_content = True
-				shutil.copyfileobj(q.raw, f)
-	except:
-		print("error")
+				with open(savepath, 'wb') as f:
+					q.raw.decode_content = True
+					shutil.copyfileobj(q.raw, f)
+		except:
+			print("error")
 
 def rchop(string, end):
 	if string.endswith(end):
@@ -137,47 +138,82 @@ def main():
 								if "webm" in args.formats:
 									download("http://giant.gfycat.com/{}.webm".format(im), "{}/{}.webm".format(reddit, im))
 							else:
-								pattern = r'.*\.tumblr\.com/post/'
+								pattern = r'https?://(zippy\.)?gfycat.com/.*$'
 								prog = re.compile(pattern)
-								m = prog.search(url.lower())
+								m = prog.search(url)
 
 								if m is not None:
-									# Tumblr
-									response = requests.get(url)
-									soup = bs(response.content, 'html.parser')
-									img_elements = soup.findAll("img")
-							
-									for img in img_elements:
-										#print(u"{}".format(img).encode(sys.stdout.encoding, errors='replace'))
-										
-										pattern = r'.*\.media\.tumblr\.com/.*/tumblr_.*'
-										prog = re.compile(pattern)
-										m = prog.search(img.attrs['src'])
+									im = m.group(0).rsplit('/', 1)[-1]
+									if "webm" in args.formats:
+										download("http://zippy.gfycat.com/{}.webm".format(im), "{}/{}.webm".format(reddit, im))
+								else:
+									pattern = r'.*\.tumblr\.com/post/'
+									prog = re.compile(pattern)
+									m = prog.search(url.lower())
+
+									if m is not None:
+										# Tumblr
+										response = requests.get(url)
+										soup = bs(response.content, 'html.parser')
+										img_elements = soup.findAll("img")
+								
+										for img in img_elements:
+											#print(u"{}".format(img).encode(sys.stdout.encoding, errors='replace'))
+											
+											pattern = r'.*\.media\.tumblr\.com/.*/tumblr_.*'
+											prog = re.compile(pattern)
+											m = prog.search(img.attrs['src'])
+
+											if m is not None:
+												img_url = img.attrs['src']
+												try:
+													if verbose:
+														print("Tumblr: "+img_url)
+													if img_url != "":
+														p = img_url.rsplit('/', 1)[-1]
+														if verbose:
+															print(p)
+															
+														download(img_url, "{}/{}".format(reddit, p))
+												except Exception as ex:
+													print(ex.strerror)
+									else:
+										pattern = r'https?://redditbooru\.com/gallery/.*$'
+										prog = re.compile(pattern, re.I)
+										m = prog.search(url)
+										print("RBR", m)
 
 										if m is not None:
-											img_url = img.attrs['src']
-											try:
-												if verbose:
-													print("Tumblr: "+img_url)
-												if img_url != "":
-													p = img_url.rsplit('/', 1)[-1]
-													if verbose:
-														print(p)
-														
-													download(img_url, "{}/{}".format(reddit, p))
-											except Exception as ex:
-												print(ex.strerror)
-								else:
+											response = requests.get(url)
+											soup = bs(response.content, 'html.parser')
+											img_elements = soup.findAll("img")
+											print("img", img_elements)
+											for img in img_elements:
+												pattern = r'https?://cdn\.awwni\.me/.*$'
+												prog = re.compile(pattern)
+												m = prog.search(img.attrs['src'])
 
-									image = rchop(url.rsplit('/', 1)[-1], "?1")
-									if image is not None:
-										if len(image) > 0:
-											try:
-												img = client.get_image(image)
-												if img.link.lower().endswith(tuple(args.formats)):
-													download(img.link, "{}/{}".format(reddit, img.link.rsplit('/', 1)[-1]))
-											except ImgurClientError as e:
-												print(e.error_message)
+												if m is not None:
+													img_url = img.attrs['src']
+													if verbose:
+														print("Awwnime: "+img_url)
+													if img_url != "":
+														p = img_url.rsplit('/', 1)[-1]
+														if verbose:
+															print(p)
+															
+														download(img_url, "{}/{}".format(reddit, p))
+										else:
+											print("LAST "+url)
+											image = rchop(url.rsplit('/', 1)[-1], "?1")
+											if image is not None:
+												if len(image) > 0:
+													try:
+														img = client.get_image(image)
+														if img.link.lower().endswith(tuple(args.formats)):
+															download(img.link, "{}/{}".format(reddit, img.link.rsplit('/', 1)[-1]))
+													except ImgurClientError as e:
+														print(e.error_message)
 			print("Last post: {}".format(r.json()["data"]["children"][-1]["data"]["id"]))
 
 		elif r.status_code == 404:
